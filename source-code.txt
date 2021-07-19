@@ -1,0 +1,205 @@
+section .data
+	RWRITE equ 2
+	phonebook db 'Phonebook.txt', 0
+	call_log db 'Clog.txt', 0
+	msg1 db 'Contact created...contact saved', 0xa, 0xd
+	lenmsg1 equ $ - msg1
+	msg3 db 'Call log Cleared', 0xa, 0xd
+	lenmsg3 equ $ - msg3
+	msg7 db '                               OPTIONS', 0xa, 0xd
+	lenmsg7 equ $ - msg7
+	msg8 db 'Calling...', 0xa, 0xd
+	lenmsg8 equ $ - msg8
+	msg10 db 'Enter 1 to view contact',0xa, 0xd
+	lenmsg10 equ $ - msg10
+	msg11 db 'Enter 2 to call',0xa, 0xd
+	lenmsg11 equ $ - msg11
+	msg12 db 'Enter 3 to Add contact', 0xa, 0xd
+	lenmsg12 equ $ - msg12
+	msg13 db 'Enter 4 to View Call log', 0xa, 0xd
+	lenmsg13 equ $ - msg13
+	msg14 db 'Enter 5 to Delete Call log', 0xa, 0xd
+	lenmsg14 equ $ - msg14
+	msg15 db '------------------------------PHONEBOOK-----------------------', 0xa,0xd
+	lenmsg15 equ $ - msg15
+	msg16 db 'Enter the Number/Name', 0xa, 0xd
+	lenmsg16 equ $ - msg16
+	msg17 db 'Dailed numbers		Missed calls		Recieved Calls', 0xa, 0xd
+	lenmsg17 equ $ - msg17
+	msg18 db '---------Saved Contacts----------', 0xa, 0xd
+	lenmsg18 equ $ - msg18
+	msg19 db 'Enter password', 0xa, 0xd
+	lenmsg19 equ $ - msg19
+	msg20 db 'Password matched', 0xa, 0xd
+	lenmsg20 equ $ - msg20
+	msg21 db 'Password Mismatched', 0xa, 0xd
+	lenmsg21 equ $ - msg21
+	msg22 db 'Contact manager is password protected', 0xa, 0xd
+	lenmsg22 equ $ - msg22
+
+section .bss
+	option resb 2
+	fd_out resb 1
+	fd_in resb 1
+	value resb 20
+	number resb 100
+	view_contact resw 100
+	password resb 50
+
+section .text
+	global _start
+%macro read 3
+	mov eax, 3			;syscall for read
+	mov ebx, %1
+	mov ecx, %2
+	mov edx, %3
+	int 0x80
+%endmacro
+%macro write 3
+	mov eax, 4			;syscall for write
+	mov ebx, %1
+	mov ecx, %2
+	mov edx, %3
+	int 0x80
+%endmacro
+%macro fileopen 2
+	mov eax, 5			;syscall for file open
+	mov ebx, %1
+	mov ecx, %2
+	mov edx, 0777      ;file permissions
+	int 0x80
+%endmacro
+%macro filedelete 1
+	mov eax, 10			;syscall for file delete
+	mov ebx, %1
+	mov ecx, 0777
+	int 0x80
+%endmacro
+%macro fileupdate 1
+	mov eax, 19			;syscall for iseek(update) 
+	mov ebx, %1
+	mov ecx, 0
+	mov edx, 2			;referencing the end of the file
+	int 0x80
+%endmacro
+%macro fileclose 1
+	mov eax, 6			;syscall for file close
+	mov ebx, %1
+	int 0x80
+%endmacro
+
+_start:
+	write 1, msg15, lenmsg15        ;print out the msg title, PHONEBOOK
+	write 1, msg22, lenmsg22		;displaying contact is password protected
+	write 1, msg19, lenmsg19		;displaying enter password
+
+	read 2, password, 10
+	mov ecx, [password]
+	cmp ecx, '1234'
+	jne _wrongpassword
+	write 1, msg20, lenmsg20
+	;displaying phonebook options
+	write 1, msg7, lenmsg7
+	write 1, msg10, lenmsg10
+	write 1, msg11, lenmsg11
+	write 1, msg12, lenmsg12
+	write 1, msg13, lenmsg13
+	write 1, msg14, lenmsg14
+
+	read 2, option, 1					;taking the users option
+	mov ecx, [option]					;putting the option into the ecx register 
+	                                    ;for comparison
+	cmp ecx, '1'
+	je _view
+	cmp ecx, '2'
+	je _dial
+	cmp ecx, '3'
+	je _create
+	cmp ecx, '4'
+	je _clogs
+	cmp ecx, '5'
+	je _delete
+
+_view:
+	write 1, msg18, lenmsg18			;displaying a title msg
+
+	fileopen phonebook, RWRITE			;open the file for reading
+	mov [fd_in], eax					;in opening a file for reading, fd_in is used
+
+	;read from file
+	read [fd_in], view_contact, 100		;reading the content of the file
+										;into the view_contact variable to be displayed
+	fileclose [fd_in]					;closing the file
+
+	;print the content of the file to the user
+	write 1, view_contact, 100
+	jmp _end
+
+_dial:
+	write 1, msg16, lenmsg16		;displaying a msg enter name/number
+	
+	read 2, number, 100				;reading input
+	read 2, number, 100
+
+	fileopen call_log, RWRITE   	;opening the call log file
+	mov [fd_out], eax				;in writing to file fd_out is used
+	fileupdate [fd_out]				;allowing the file to the updated
+	
+	write [fd_out], number, 100  	;writing to the Call log file
+	fileclose [fd_out]
+	
+	write 1, msg8, lenmsg8			;displaying msg calling
+	write 1, number, 100        		;appending the name/number to the msg calling
+	jmp _end
+
+_create:
+	write 1, msg16, lenmsg16  		;displaying msg enter name/number	  
+	
+	read 2, number, 100				;reading input from user
+	read 2, number, 100
+	
+	fileopen phonebook, 2			;phonebook opened with read and write permissions
+	mov [fd_out], eax
+	fileupdate [fd_out]				;allowing file to be updated
+	 
+	write [fd_out], number, 100		;writing the name/number to file
+	fileclose [fd_out]
+	write 1, msg1, lenmsg1     		;msg contact created...contact saved
+	jmp _end
+
+_clogs:
+	write 1, msg17, lenmsg17		;msg title
+	fileopen call_log, 2
+	mov [fd_in], eax
+
+	read [fd_in], view_contact, 100	;read from file
+	fileclose [fd_in]				;closing the file
+	write 1, view_contact, 100
+	jmp _end
+
+_delete:
+	filedelete call_log
+	write 1, msg3, lenmsg3      ;call log cleared
+	jmp _end
+_wrongpassword:
+	write 1, msg21, lenmsg21
+_end:
+	mov eax, 1
+	int 0x80
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
